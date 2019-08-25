@@ -1,0 +1,8 @@
+Debug/
+Release/
+*.vcxproj
+*.filters
+*.rc
+*.aps
+*.user
+*.o
