@@ -18,27 +18,32 @@ vector<Color> colors;
 RenderWindow* windowPtr = nullptr;
 Image* imagePtr = nullptr;
 
-const Vector2u GRID_SIZE(4, 4);
+const Vector2u GRID_SIZE(20, 20);
 
-Color findAverageColor(const Image& image, const Vector2f& a, const Vector2f& b, const Vector2f& c) {    // Find the average color in the image within the triangle between a, b, and c.
+Color findAverageColor(const Image& image, const Color& altColor, const Vector2f& a, const Vector2f& b, const Vector2f& c) {    // Find the average color in the image within the triangle between a, b, and c. If no color could be found, then altColor is picked.
     const Vector2u TOP_LEFT(max(0, static_cast<int>(min(a.x, min(b.x, c.x)))), max(0, static_cast<int>(min(a.y, min(b.y, c.y)))));
     const Vector2u BOTTOM_RIGHT(min(static_cast<int>(image.getSize().x - 1), static_cast<int>(max(a.x, max(b.x, c.x)))), min(static_cast<int>(image.getSize().y - 1), static_cast<int>(max(a.y, max(b.y, c.y)))));
-    int numPixels = 0;
+    int numColors = 0;
     double redSum = 0.0, greenSum = 0.0, blueSum = 0.0;
-    Vertex point;
-    point.color = Color::White;
     for (unsigned int y = TOP_LEFT.y; y < BOTTOM_RIGHT.y; ++y) {
         for (unsigned int x = TOP_LEFT.x; x < BOTTOM_RIGHT.x; ++x) {
             bool signBACrossPA = (a.x - b.x) * (a.y - y) < (a.y - b.y) * (a.x - x);
             bool signCBCrossPB = (b.x - c.x) * (b.y - y) < (b.y - c.y) * (b.x - x);
             bool signACCrossPC = (c.x - a.x) * (c.y - y) < (c.y - a.y) * (c.x - x);
-            if (signBACrossPA == signCBCrossPB && signCBCrossPB == signACCrossPC) {
-                point.position = Vector2f(static_cast<float>(x), static_cast<float>(y));
-                windowPtr->draw(&point, 1, Points);
+            if (signBACrossPA == signCBCrossPB && signCBCrossPB == signACCrossPC) {    // If point lies within the triangle, then add it to the average.
+                Color color = image.getPixel(x, y);
+                redSum += color.r * color.r;    // Correct way to average colors is to take the mean of the squares of each component, then take square root.
+                greenSum += color.g * color.g;
+                blueSum += color.b * color.b;
+                ++numColors;
             }
         }
     }
-    return Color(sqrt(redSum / numPixels), sqrt(greenSum / numPixels), sqrt(blueSum / numPixels));
+    if (numColors > 0) {
+        return Color(sqrt(redSum / numColors), sqrt(greenSum / numColors), sqrt(blueSum / numColors));
+    } else {
+        return altColor;
+    }
 }
 
 void buildTriangles(const Image& image) {
@@ -73,16 +78,21 @@ void buildTriangles(const Image& image) {
     }
     points.push_back(CANVAS_SIZE);
     
-    const int numColors = GRID_SIZE.x * GRID_SIZE.y * 2;
+    /*const int numColors = GRID_SIZE.x * GRID_SIZE.y * 2;
     uniform_int_distribution<int> colorRange(0, 255);
     for (int i = 0; i < numColors; ++i) {
         colors.push_back(Color(colorRange(mainRNG), colorRange(mainRNG), colorRange(mainRNG)));
-    }
-    /*for (unsigned int y = 0; y < GRID_SIZE.y; ++y) {
-        for (unsigned int x = 0; x < GRID_SIZE.x; ++x) {
-            
-        }
     }*/
+    Color lastColor = Color::Black;
+    for (unsigned int y = 0; y < GRID_SIZE.y; ++y) {
+        for (unsigned int x = 0; x < GRID_SIZE.x; ++x) {
+            unsigned int pointIndex = y * (GRID_SIZE.x + 1) + x;
+            colors.push_back(findAverageColor(image, lastColor, points[pointIndex], points[pointIndex + 1], points[pointIndex + 1 + GRID_SIZE.x]));
+            lastColor = colors.back();
+            colors.push_back(findAverageColor(image, lastColor, points[pointIndex + 1], points[pointIndex + 1 + GRID_SIZE.x], points[pointIndex + 2 + GRID_SIZE.x]));
+            lastColor = colors.back();
+        }
+    }
 }
 
 void drawTriangles(RenderWindow& window, const View& view) {
@@ -107,7 +117,7 @@ void drawTriangles(RenderWindow& window, const View& view) {
             ++colorIndex;
         }
     }
-    findAverageColor(*imagePtr, points[6], points[7], points[11]);
+    window.setTitle("LowPoly [Points: " + to_string(points.size()) + "]");
     window.display();
 }
 
@@ -128,16 +138,17 @@ int main() {
     windowPtr = &window;
     imagePtr = &image;
     View view(FloatRect(Vector2f(0.0f, 0.0f), Vector2f(window.getSize())));
-    buildTriangles(image);
-    window.setTitle("LowPoly [Points: " + to_string(points.size()) + "]");
     
+    buildTriangles(image);
     drawTriangles(window, view);
+    cout << "Render complete, press Enter to run it again." << endl;
     while (window.isOpen()) {
         Event event;
         while (window.pollEvent(event)) {    // Process events.
             if (event.type == Event::KeyPressed) {
                 if (event.key.code == Keyboard::Enter) {
                     buildTriangles(image);
+                    window.setTitle("LowPoly Loading...");
                     drawTriangles(window, view);
                 }
             } else if (event.type == Event::Resized) {
