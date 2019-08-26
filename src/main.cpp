@@ -1,8 +1,10 @@
 #include <chrono>
+#include <cmath>
 #include <fstream>
 #include <iostream>
 #include <random>
 #include <SFML/Graphics.hpp>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
@@ -10,15 +12,37 @@
 using namespace std;
 using namespace sf;
 
-const Vector2u INITIAL_WINDOW_SIZE(600, 600);
 mt19937 mainRNG;
 vector<Vector2f> points;
 vector<Color> colors;
+RenderWindow* windowPtr = nullptr;
+Image* imagePtr = nullptr;
 
-const Vector2u GRID_SIZE(10, 10);
+const Vector2u GRID_SIZE(4, 4);
 
-void buildTriangles() {
-    const Vector2f CANVAS_SIZE(500.0f, 500.0f);
+Color findAverageColor(const Image& image, const Vector2f& a, const Vector2f& b, const Vector2f& c) {    // Find the average color in the image within the triangle between a, b, and c.
+    const Vector2u TOP_LEFT(max(0, static_cast<int>(min(a.x, min(b.x, c.x)))), max(0, static_cast<int>(min(a.y, min(b.y, c.y)))));
+    const Vector2u BOTTOM_RIGHT(min(static_cast<int>(image.getSize().x - 1), static_cast<int>(max(a.x, max(b.x, c.x)))), min(static_cast<int>(image.getSize().y - 1), static_cast<int>(max(a.y, max(b.y, c.y)))));
+    int numPixels = 0;
+    double redSum = 0.0, greenSum = 0.0, blueSum = 0.0;
+    Vertex point;
+    point.color = Color::White;
+    for (unsigned int y = TOP_LEFT.y; y < BOTTOM_RIGHT.y; ++y) {
+        for (unsigned int x = TOP_LEFT.x; x < BOTTOM_RIGHT.x; ++x) {
+            bool signBACrossPA = (a.x - b.x) * (a.y - y) < (a.y - b.y) * (a.x - x);
+            bool signCBCrossPB = (b.x - c.x) * (b.y - y) < (b.y - c.y) * (b.x - x);
+            bool signACCrossPC = (c.x - a.x) * (c.y - y) < (c.y - a.y) * (c.x - x);
+            if (signBACrossPA == signCBCrossPB && signCBCrossPB == signACCrossPC) {
+                point.position = Vector2f(static_cast<float>(x), static_cast<float>(y));
+                windowPtr->draw(&point, 1, Points);
+            }
+        }
+    }
+    return Color(sqrt(redSum / numPixels), sqrt(greenSum / numPixels), sqrt(blueSum / numPixels));
+}
+
+void buildTriangles(const Image& image) {
+    const Vector2f CANVAS_SIZE(image.getSize());
     const Vector2f SQUARE_SIZE(CANVAS_SIZE.x / GRID_SIZE.x, CANVAS_SIZE.y / GRID_SIZE.y);
     
     points.clear();
@@ -50,10 +74,15 @@ void buildTriangles() {
     points.push_back(CANVAS_SIZE);
     
     const int numColors = GRID_SIZE.x * GRID_SIZE.y * 2;
+    uniform_int_distribution<int> colorRange(0, 255);
     for (int i = 0; i < numColors; ++i) {
-        int alpha = static_cast<double>(i) / numColors * INT_MAX;
-        colors.push_back(Color(alpha, alpha, alpha));
+        colors.push_back(Color(colorRange(mainRNG), colorRange(mainRNG), colorRange(mainRNG)));
     }
+    /*for (unsigned int y = 0; y < GRID_SIZE.y; ++y) {
+        for (unsigned int x = 0; x < GRID_SIZE.x; ++x) {
+            
+        }
+    }*/
 }
 
 void drawTriangles(RenderWindow& window, const View& view) {
@@ -78,14 +107,28 @@ void drawTriangles(RenderWindow& window, const View& view) {
             ++colorIndex;
         }
     }
+    findAverageColor(*imagePtr, points[6], points[7], points[11]);
     window.display();
 }
 
 int main() {
+    string imageFilename;
+    cout << "Enter filename of image to load: " << endl;
+    getline(cin, imageFilename);
+    Image image;
+    if (!image.loadFromFile(imageFilename)) {
+        cout << "Error: Unable to open file \"" << imageFilename << "\"" << endl;
+        cout << "(Press enter)" << endl;
+        cin.get();
+        return -1;
+    }
+    
     mainRNG.seed(static_cast<unsigned long>(chrono::high_resolution_clock::now().time_since_epoch().count()));
-    RenderWindow window(VideoMode(INITIAL_WINDOW_SIZE.x, INITIAL_WINDOW_SIZE.y), "LowPoly Loading...");
+    RenderWindow window(VideoMode(image.getSize().x, image.getSize().y), "LowPoly Loading...");
+    windowPtr = &window;
+    imagePtr = &image;
     View view(FloatRect(Vector2f(0.0f, 0.0f), Vector2f(window.getSize())));
-    buildTriangles();
+    buildTriangles(image);
     window.setTitle("LowPoly [Points: " + to_string(points.size()) + "]");
     
     drawTriangles(window, view);
@@ -94,7 +137,7 @@ int main() {
         while (window.pollEvent(event)) {    // Process events.
             if (event.type == Event::KeyPressed) {
                 if (event.key.code == Keyboard::Enter) {
-                    buildTriangles();
+                    buildTriangles(image);
                     drawTriangles(window, view);
                 }
             } else if (event.type == Event::Resized) {
@@ -106,4 +149,5 @@ int main() {
         }
         this_thread::sleep_for(chrono::milliseconds(10));
     }
+    return 0;
 }
