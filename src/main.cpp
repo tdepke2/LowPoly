@@ -18,8 +18,6 @@ vector<Color> colors;
 RenderWindow* windowPtr = nullptr;
 Image* imagePtr = nullptr;
 
-const Vector2u GRID_SIZE(20, 20);
-
 Color findAverageColor(const Image& image, const Color& altColor, const Vector2f& a, const Vector2f& b, const Vector2f& c) {    // Find the average color in the image within the triangle between a, b, and c. If no color could be found, then altColor is picked.
     const Vector2u TOP_LEFT(max(0, static_cast<int>(min(a.x, min(b.x, c.x)))), max(0, static_cast<int>(min(a.y, min(b.y, c.y)))));
     const Vector2u BOTTOM_RIGHT(min(static_cast<int>(image.getSize().x - 1), static_cast<int>(max(a.x, max(b.x, c.x)))), min(static_cast<int>(image.getSize().y - 1), static_cast<int>(max(a.y, max(b.y, c.y)))));
@@ -40,13 +38,13 @@ Color findAverageColor(const Image& image, const Color& altColor, const Vector2f
         }
     }
     if (numColors > 0) {
-        return Color(sqrt(redSum / numColors), sqrt(greenSum / numColors), sqrt(blueSum / numColors));
+        return Color(static_cast<Uint8>(sqrt(redSum / numColors)), static_cast<Uint8>(sqrt(greenSum / numColors)), static_cast<Uint8>(sqrt(blueSum / numColors)));
     } else {
         return altColor;
     }
 }
 
-void buildTriangles(const Image& image) {
+void buildTriangles(const Image& image, const Vector2u& GRID_SIZE) {
     const Vector2f CANVAS_SIZE(image.getSize());
     const Vector2f SQUARE_SIZE(CANVAS_SIZE.x / GRID_SIZE.x, CANVAS_SIZE.y / GRID_SIZE.y);
     
@@ -95,7 +93,7 @@ void buildTriangles(const Image& image) {
     }
 }
 
-void drawTriangles(RenderWindow& window, const View& view) {
+void drawTriangles(RenderWindow& window, const View& view, const Vector2u& GRID_SIZE) {
     ConvexShape triangle(3);
     window.clear();
     window.setView(view);
@@ -117,13 +115,13 @@ void drawTriangles(RenderWindow& window, const View& view) {
             ++colorIndex;
         }
     }
-    window.setTitle("LowPoly [Points: " + to_string(points.size()) + "]");
+    window.setTitle("LowPoly [Points: " + to_string(points.size()) + ", Triangles: " + to_string(colors.size()) + "]");
     window.display();
 }
 
 int main() {
     string imageFilename;
-    cout << "Enter filename of image to load: " << endl;
+    cout << "Enter filename of image to load: ";
     getline(cin, imageFilename);
     Image image;
     if (!image.loadFromFile(imageFilename)) {
@@ -132,6 +130,11 @@ int main() {
         cin.get();
         return -1;
     }
+    float x, y;
+    cout << "Enter desired grid square width and height in pixels (will be approximated): ";
+    cin >> x >> y;
+    const Vector2u GRID_SIZE(static_cast<unsigned int>(image.getSize().x / x + 0.5f), static_cast<unsigned int>(image.getSize().y / y + 0.5f));
+    cout << "Grid size is " << GRID_SIZE.x << " x " << GRID_SIZE.y << endl;
     
     mainRNG.seed(static_cast<unsigned long>(chrono::high_resolution_clock::now().time_since_epoch().count()));
     RenderWindow window(VideoMode(image.getSize().x, image.getSize().y), "LowPoly Loading...");
@@ -139,21 +142,21 @@ int main() {
     imagePtr = &image;
     View view(FloatRect(Vector2f(0.0f, 0.0f), Vector2f(window.getSize())));
     
-    buildTriangles(image);
-    drawTriangles(window, view);
+    buildTriangles(image, GRID_SIZE);
+    drawTriangles(window, view, GRID_SIZE);
     cout << "Render complete, press Enter to run it again." << endl;
     while (window.isOpen()) {
         Event event;
         while (window.pollEvent(event)) {    // Process events.
             if (event.type == Event::KeyPressed) {
                 if (event.key.code == Keyboard::Enter) {
-                    buildTriangles(image);
+                    buildTriangles(image, GRID_SIZE);
                     window.setTitle("LowPoly Loading...");
-                    drawTriangles(window, view);
+                    drawTriangles(window, view, GRID_SIZE);
                 }
             } else if (event.type == Event::Resized) {
                 view.reset(FloatRect(Vector2f(0.0f, 0.0f), Vector2f(window.getSize())));
-                drawTriangles(window, view);
+                drawTriangles(window, view, GRID_SIZE);
             } else if (event.type == Event::Closed) {
                 window.close();
             }
