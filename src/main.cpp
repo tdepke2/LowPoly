@@ -145,14 +145,36 @@ int main() {
     buildTriangles(image, GRID_SIZE);
     drawTriangles(window, view, GRID_SIZE);
     cout << "Render complete, press Enter to run it again." << endl;
+    cout << "Press Ctrl + S to save the points and triangle colors to a file." << endl;
     while (window.isOpen()) {
         Event event;
         while (window.pollEvent(event)) {    // Process events.
             if (event.type == Event::KeyPressed) {
-                if (event.key.code == Keyboard::Enter) {
+                if (event.key.code == Keyboard::Return) {
                     buildTriangles(image, GRID_SIZE);
                     window.setTitle("LowPoly Loading...");
                     drawTriangles(window, view, GRID_SIZE);
+                } else if (event.key.code == Keyboard::S && event.key.control) {
+                    cout << "Saving data... ";
+                    ofstream outputFile("pointsAndColors.txt");
+                    if (!outputFile.is_open()) {
+                        cout << "Error: Unable to open file \"pointsAndColors.txt\" for writing." << endl;
+                        cout << "(Press enter)" << endl;
+                        cin.get();
+                        return -1;
+                    }
+                    
+                    outputFile << GRID_SIZE.x << " " << GRID_SIZE.y << endl;
+                    outputFile << points.size() << endl;
+                    for (const Vector2f& p : points) {
+                        outputFile << p.x << " " << p.y << endl;
+                    }
+                    outputFile << colors.size() << endl;
+                    for (const Color& c : colors) {
+                        outputFile << static_cast<int>(c.r) << " " << static_cast<int>(c.g) << " " << static_cast<int>(c.b) << endl;
+                    }
+                    outputFile.close();
+                    cout << "Done" << endl;
                 }
             } else if (event.type == Event::Resized) {
                 view.reset(FloatRect(Vector2f(0.0f, 0.0f), Vector2f(window.getSize())));
